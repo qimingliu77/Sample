@@ -1,0 +1,79 @@
+setwd('Location')
+
+#### install library
+
+library('RODBC')
+
+#### connect to sql server, retrive e-app data
+
+dbhandle <- odbcDriverConnect('driver={SQL Server};server=ServerName;database=DatabaseName;trusted_connection=true')
+
+e_app <- sqlQuery(dbhandle, 'select * from dbo.TableName)
+
+
+#### load Census Hispanic name library
+
+census <- as.matrix(read.csv('TableName.csv', header = FALSE))
+
+#### convert primary and spouse name to upper case, trim white spaces 
+
+e_app$PrimaryPersonLastName <- trimws(toupper(e_app$ColumnName))
+e_app$SpouseLastName <- trimws(toupper(e_app$ColumnName))
+e_app$SaleForm_A_Primary_LastName <- trimws(toupper(e_app$ColumnName))
+e_app$SaleForm_A_Spouse_LastName <- trimws(toupper(e_app$ColumnName))
+e_app$SaleForm_B_Primary_LastName <- trimws(toupper(e_app$ColumnName))
+e_app$SaleForm_B_Spouse_LastName <- trimws(toupper(e_app$ColumnName))
+
+
+
+#### match primary and spouse name to Census Hispanic name library, only last name
+
+## primary
+primary_indicator <- as.data.frame(lapply(e_app$PrimaryPersonLastName, match, table = census, nomatch = 0))
+primary_indicator <- t(primary_indicator)
+
+
+## spouse
+spouse_indicator <- as.data.frame(lapply(e_app$SpouseLastName, match, table = census, nomatch = 0))
+spouse_indicator <- t(spouse_indicator)
+
+
+## saleform A primary
+saleform_A_Primary_indicator <- as.data.frame(lapply(e_app$SaleForm_A_Primary_LastName, match, table = census, nomatch = 0))
+saleform_A_Primary_indicator <- t(saleform_A_Primary_indicator)
+
+
+## saleform A spouse
+saleform_A_Spouse_indicator <- as.data.frame(lapply(e_app$SaleForm_A_Spouse_LastName, match, table = census, nomatch = 0))
+saleform_A_Spouse_indicator <- t(saleform_A_Spouse_indicator)
+
+
+## saleform B primary
+saleform_B_Primary_indicator <- as.data.frame(lapply(e_app$SaleForm_B_Primary_LastName, match, table = census, nomatch = 0))
+saleform_B_Primary_indicator <- t(saleform_B_Primary_indicator)
+
+
+## saleform B spouse
+saleform_B_Spouse_indicator <- as.data.frame(lapply(e_app$SaleForm_B_Spouse_LastName, match, table = census, nomatch = 0))
+saleform_B_Spouse_indicator <- t(saleform_B_Spouse_indicator)
+
+
+#### check whether the function matches Hispanic name correctly 
+#### test <- cbind(e_app, primary_indicator)
+#### test1 <- head(test[,c('PrimaryPersonLastName','primary_indicator')], n = 50)
+
+
+#### combine six Hispanic indicator columns, create a final indicator based on all values
+
+Hispanic_indicator <- primary_indicator + spouse_indicator + saleform_A_Primary_indicator + saleform_A_Spouse_indicator + saleform_B_Primary_indicator + saleform_B_Spouse_indicator
+
+Hispanic_indicator <- ifelse(Hispanic_indicator > 0, '1', '0')
+
+
+#### combine Hispanic indicator to e_app data and write sql table in source database
+
+eapp_output <- cbind(as.character(e_app$ColumnName), Hispanic_indicator)
+
+eapp_output <- as.data.frame(eapp_output)
+
+sqlSave(dbhandle, eapp_output, tablename = "dbo.TableName", rownames = FALSE) 
